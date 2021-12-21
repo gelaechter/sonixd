@@ -583,6 +583,6 @@ app.on('activate', () => {
 });
 
 ipcMain.on('reload', () => {
-  app.quit();
-  createWindow();
+  app.relaunch();
+  app.exit();
 });
