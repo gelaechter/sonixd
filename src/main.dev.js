@@ -583,6 +583,14 @@ app.on('activate', () => {
 });
 
 ipcMain.on('reload', () => {
-  app.relaunch();
-  app.exit();
+  if (process.env.APPIMAGE) {
+    app.relaunch({
+      execPath: process.env.APPIMAGE,
+      args: process.argv.slice(1).concat(['--appimage-extract-and-run']),
+    });
+    app.exit(0);
+  } else {
+    app.relaunch();
+    app.exit();
+  }
 });
