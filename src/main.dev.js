@@ -20,6 +20,14 @@ import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import { configureStore } from '@reduxjs/toolkit';
 import { forwardToRenderer, triggerAlias, replayActionMain } from 'electron-redux';
+import {
+  MediaPlaybackStatus,
+  MediaPlaybackType,
+  SystemMediaTransportControlsButton,
+} from '@nodert-win10-au/windows.media';
+import { BackgroundMediaPlayer } from '@nodert-win10-au/windows.media.playback';
+import { RandomAccessStreamReference } from '@nodert-win10-au/windows.storage.streams';
+import { Uri } from '@nodert-win10-au/windows.foundation';
 import playerReducer, { setStatus } from './redux/playerSlice';
 import playQueueReducer, {
   decrementCurrentIndex,
@@ -333,6 +341,83 @@ if (isLinux) {
           ? arg.genre.filter((genre) => genre.title).map((genre) => genre.title)
           : null,
     };
+  });
+}
+
+if (isWindows && isWindows10) {
+  const Controls = BackgroundMediaPlayer.current.systemMediaTransportControls;
+
+  Controls.isChannelDownEnabled = false;
+  Controls.isChannelUpEnabled = false;
+  Controls.isFastForwardEnabled = false;
+  Controls.isRecordEnabled = false;
+  Controls.isRewindEnabled = false;
+  Controls.isNextEnabled = true;
+  Controls.isPauseEnabled = true;
+  Controls.isPlayEnabled = true;
+  Controls.isPreviousEnabled = true;
+  Controls.isStopEnabled = true;
+
+  Controls.isEnabled = true;
+
+  Controls.playbackStatus = MediaPlaybackStatus.closed;
+  Controls.displayUpdater.type = MediaPlaybackType.music;
+
+  Controls.displayUpdater.musicProperties.title = 'Sonixd';
+  Controls.displayUpdater.musicProperties.artist = 'No Track Playing';
+  Controls.displayUpdater.musicProperties.albumTitle = 'No Album Playing';
+  Controls.displayUpdater.update();
+
+  Controls.on('buttonpressed', (sender, eventArgs) => {
+    switch (eventArgs.button) {
+      case SystemMediaTransportControlsButton.play:
+        play();
+        Controls.playbackStatus = MediaPlaybackStatus.playing;
+        break;
+      case SystemMediaTransportControlsButton.pause:
+        pause();
+        Controls.playbackStatus = MediaPlaybackStatus.paused;
+        break;
+      case SystemMediaTransportControlsButton.stop:
+        stop();
+        Controls.playbackStatus = MediaPlaybackStatus.stopped;
+        break;
+      case SystemMediaTransportControlsButton.next:
+        nextTrack();
+        break;
+      case SystemMediaTransportControlsButton.previous:
+        previousTrack();
+        break;
+      default:
+        break;
+    }
+  });
+
+  ipcMain.on('playpause', (_event, arg) => {
+    if (arg.status === 'PLAYING') {
+      Controls.playbackStatus = MediaPlaybackStatus.playing;
+    } else {
+      Controls.playbackStatus = MediaPlaybackStatus.paused;
+    }
+  });
+
+  ipcMain.on('current-song', (_event, arg) => {
+    if (Controls.playbackStatus !== MediaPlaybackStatus.playing) {
+      Controls.playbackStatus = MediaPlaybackStatus.playing;
+    }
+
+    Controls.displayUpdater.musicProperties.title = arg.title || 'Unknown Title';
+    Controls.displayUpdater.musicProperties.artist =
+      arg.artist?.length !== 0
+        ? arg.artist?.map((artist) => artist.title).join(', ')
+        : 'Unknown Artist';
+    Controls.displayUpdater.musicProperties.albumTitle = arg.album || 'Unknown Album';
+
+    Controls.displayUpdater.thumbnail = RandomAccessStreamReference.createFromUri(
+      new Uri(arg.image)
+    );
+
+    Controls.displayUpdater.update();
   });
 }
 
